@@ -1,5 +1,5 @@
 const WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbw5zA4d7aR3R86RfmMmeogSCRxwg02BQGFL9gELckbhcR7xWE0tqmLKqf70FUvgg90dgg/exec";
+  "https://script.google.com/macros/s/AKfycbztxX9EjdXXXGKDrzOsN7O7V6rb0onHs6BcHucQE074_qky97gWZ74f2a-uFqHyp9KPBA/exec";
 
 document.addEventListener("DOMContentLoaded", () => {
   const submitBtn = document.getElementById("submitBtn");
@@ -318,3 +318,4 @@ document.addEventListener("DOMContentLoaded", () => {
   // init
   loadRemaining();
 });
+
