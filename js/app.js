@@ -1,183 +1,417 @@
-const WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbzqecdqJYmb-qENwEXnpUF6MhT5BdOngqwCl9h3w8M93YHZFI8LOm7IFVNOM1_MC3_X/exec";
+/* =========================================================
+   invite-form/js/app.js  (GitHub Pages version)
+   - Supports AR/EN toggle via ?lang=en
+   - Shows remaining via GET (if blocked, page still works)
+   - Add guests as rows: name + phone + remove
+   - Submit as application/x-www-form-urlencoded (NO preflight)
+   - Server (Apps Script) must accept: id + names (multiline "name - phone")
+========================================================= */
 
-/* Elements */
+/* ====== PUT YOUR WEB APP URL HERE (must end with /exec) ====== */
+const WEB_APP_URL =
+  "https://script.google.com/macros/s/AKfycbySY6RxbiPOwogEHK4S_7Oy-Qg_vtW55jEYarCxiSEoP0uLobPbwitDaQJE3GFwCOYL3g/exec";
+
+/* =========================
+   Elements
+========================= */
+const langToggleBtn = document.getElementById("langToggle");
+const titleEl = document.getElementById("title");
+const subtitleEl = document.getElementById("subtitle");
+const infoBox = document.getElementById("infoBox");
+const entriesWrap = document.getElementById("entries");
+const addBtn = document.getElementById("addBtn");
+const addText = document.getElementById("addText");
+const counterBox = document.getElementById("counter");
 const submitBtn = document.getElementById("submitBtn");
 const resultBox = document.getElementById("result");
-const textarea = document.getElementById("names");
-const infoBox = document.getElementById("infoBox");
-const counterBox = document.getElementById("counter");
-const langToggleBtn = document.getElementById("langToggle");
 
-/* Helpers */
-function getIdFromUrl() {
-  return new URLSearchParams(window.location.search).get("id") || "";
+/* =========================
+   Helpers
+========================= */
+function getParam(name) {
+  return new URLSearchParams(window.location.search).get(name) || "";
 }
 
-function getLangFromUrl() {
-  return new URLSearchParams(window.location.search).get("lang") === "en" ? "en" : "ar";
+function currentLang() {
+  return getParam("lang") === "en" ? "en" : "ar";
 }
 
-function countEntries(text) {
-  return text.split("\n").map(l => l.trim()).filter(l => l !== "").length;
+function setMessage(type, text) {
+  resultBox.className = "message " + type;
+  resultBox.textContent = text;
 }
 
-/* i18n */
-const LANG = {
+function clearMessage() {
+  resultBox.className = "message";
+  resultBox.textContent = "";
+}
+
+function cleanPhone(raw) {
+  return String(raw || "").trim().replace(/[^\d+]/g, "");
+}
+
+function isValidPhone(raw) {
+  // + optional then 7..15 digits
+  return /^\+?\d{7,15}$/.test(cleanPhone(raw));
+}
+
+function getRows() {
+  return Array.from(entriesWrap.querySelectorAll(".entry-row"));
+}
+
+function getFilledRows() {
+  const rows = getRows();
+  const out = [];
+  for (const row of rows) {
+    const name = row.querySelector(".name").value.trim();
+    const phone = row.querySelector(".phone").value.trim();
+    if (!name && !phone) continue;
+    out.push({ name, phone });
+  }
+  return out;
+}
+
+function buildNamesMultiline(entries) {
+  // server expects lines like: "Name - +123..."
+  return entries.map(x => `${x.name} - ${cleanPhone(x.phone)}`).join("\n");
+}
+
+/* =========================
+   i18n
+========================= */
+const I18N = {
   ar: {
     pageTitle: "تسجيل المدعوين",
     title: "تسجيل المدعوين",
     loading: "جارٍ تحميل البيانات...",
-    subtitle: "يرجى إدخال الاسم مع رقم الهاتف (كل شخص بسطر)",
-    placeholder: "مثال:\nحمزة السمان - 0944123456\nسلمى الجبان - +97455123456",
+    subtitle: "أدخل الاسم ورقم الهاتف ثم اضغط +",
+    addGuest: "إضافة شخص",
     submit: "إرسال",
     remaining: r => `المتبقي: ${r}`,
     counter: (c, r) => `عدد المدخلين: ${c} / ${r}`,
+    counterNoLimit: c => `عدد المدخلين: ${c}`,
     exceeded: r => `⚠️ تجاوزت الحد (${r})`,
-    invalid: "الرابط غير صالح",
+    invalidLink: "الرابط غير صالح",
     noMore: "تم استكمال العدد المسموح",
-    sending: "جارٍ الإرسال..."
+    sending: "جارٍ الإرسال...",
+    pleaseAdd: "يرجى إضافة شخص واحد على الأقل",
+    fillBoth: "يرجى إدخال الاسم ورقم الهاتف لكل شخص",
+    badPhone: "يرجى إدخال رقم هاتف صحيح",
+    networkError: "خطأ بالشبكة"
   },
   en: {
     pageTitle: "Guest Registration",
     title: "Guest Registration",
     loading: "Loading data...",
-    subtitle: "Please enter name and phone number (one per line)",
-    placeholder: "Example:\nHamza AlSamman - +963944123456\nSalma AlJabban - +97455123456",
+    subtitle: "Enter name and phone, then press +",
+    addGuest: "Add guest",
     submit: "Submit",
     remaining: r => `Remaining: ${r}`,
     counter: (c, r) => `Entered: ${c} / ${r}`,
+    counterNoLimit: c => `Entered: ${c}`,
     exceeded: r => `⚠️ Limit exceeded (${r})`,
-    invalid: "Invalid link",
+    invalidLink: "Invalid link",
     noMore: "No remaining slots",
-    sending: "Submitting..."
+    sending: "Submitting...",
+    pleaseAdd: "Please add at least one guest",
+    fillBoth: "Please enter name and phone for each guest",
+    badPhone: "Please enter a valid phone number",
+    networkError: "Network error"
   }
 };
 
-const lang = getLangFromUrl();
-const T = LANG[lang];
+const lang = currentLang();
+const T = I18N[lang];
 
-/* Apply translations */
-document.querySelectorAll("[data-i18n]").forEach(el => {
-  el.innerText = T[el.dataset.i18n];
-});
-document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
-  el.placeholder = T[el.dataset.i18nPlaceholder];
-});
+/* Apply language to doc */
+document.documentElement.lang = lang;
+document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
 document.title = T.pageTitle;
 
-/* Lang toggle */
-langToggleBtn.innerText = lang === "ar" ? "English" : "العربية";
+if (titleEl) titleEl.textContent = T.title;
+if (subtitleEl) subtitleEl.textContent = T.subtitle;
+if (addText) addText.textContent = T.addGuest;
+if (submitBtn) submitBtn.textContent = T.submit;
+
+langToggleBtn.textContent = lang === "ar" ? "English" : "العربية";
 langToggleBtn.onclick = () => {
   const params = new URLSearchParams(window.location.search);
   params.set("lang", lang === "ar" ? "en" : "ar");
   window.location.search = params.toString();
 };
 
-/* Remaining */
-const id = getIdFromUrl();
+/* =========================
+   State
+========================= */
+const id = getParam("id");
 let remaining = 0;
+// If GET is blocked by CORS, we set "unknownRemaining" and let server enforce on submit
+let remainingUnknown = false;
 
-function setMessage(type, text) {
-  resultBox.className = "message " + type;
-  resultBox.innerText = text;
+/* =========================
+   UI Row builder
+========================= */
+function createRow() {
+  const row = document.createElement("div");
+  row.className = "entry-row";
+
+  const nameInput = document.createElement("input");
+  nameInput.className = "name";
+  nameInput.type = "text";
+  nameInput.placeholder = lang === "en" ? "Full name" : "الاسم الكامل";
+  nameInput.autocomplete = "name";
+
+  const phoneInput = document.createElement("input");
+  phoneInput.className = "phone";
+  phoneInput.type = "tel";
+  phoneInput.placeholder = lang === "en" ? "Phone number (+ optional)" : "رقم الهاتف (+اختياري)";
+  phoneInput.autocomplete = "tel";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "remove-btn";
+  removeBtn.type = "button";
+  removeBtn.textContent = "×";
+
+  removeBtn.onclick = () => {
+    row.remove();
+    if (getRows().length === 0) {
+      entriesWrap.appendChild(createRow());
+    }
+    clearMessage();
+    updateCounter();
+    updateButtons();
+  };
+
+  const onChange = () => {
+    clearMessage();
+    updateCounter();
+  };
+
+  nameInput.addEventListener("input", onChange);
+  phoneInput.addEventListener("input", onChange);
+
+  row.appendChild(nameInput);
+  row.appendChild(phoneInput);
+  row.appendChild(removeBtn);
+
+  return row;
 }
 
-function clearMessage() {
-  resultBox.className = "message";
-  resultBox.innerText = "";
-}
+/* =========================
+   Counter + Buttons
+========================= */
+function updateCounter() {
+  const count = getFilledRows().length;
 
-/* GET remaining (might be blocked in some cases; if blocked, we still allow submit) */
-async function loadRemaining() {
-  if (!id) {
-    infoBox.innerText = T.invalid;
-    textarea.style.display = submitBtn.style.display = "none";
+  if (remainingUnknown) {
+    counterBox.textContent = T.counterNoLimit(count);
     return;
   }
 
-  infoBox.innerText = T.loading;
+  counterBox.textContent =
+    count > remaining ? T.exceeded(remaining) : T.counter(count, remaining);
+}
+
+function updateButtons() {
+  // Submit disabled only when no id or when remaining known and <= 0
+  if (!id) {
+    addBtn.disabled = true;
+    submitBtn.disabled = true;
+    return;
+  }
+
+  if (!remainingUnknown && remaining <= 0) {
+    addBtn.disabled = true;
+    submitBtn.disabled = true;
+    return;
+  }
+
+  // Add button disabled if we already have remaining rows created (not just filled)
+  if (!remainingUnknown) {
+    addBtn.disabled = getRows().length >= remaining;
+  } else {
+    addBtn.disabled = false;
+  }
+
+  submitBtn.disabled = false;
+}
+
+/* =========================
+   Load Remaining (GET)
+========================= */
+async function loadRemaining() {
+  if (!id) {
+    infoBox.textContent = T.invalidLink;
+    entriesWrap.style.display = "none";
+    addBtn.style.display = "none";
+    submitBtn.style.display = "none";
+    counterBox.style.display = "none";
+    return;
+  }
+
+  infoBox.textContent = T.loading;
 
   try {
     const res = await fetch(`${WEB_APP_URL}?id=${encodeURIComponent(id)}`);
     const d = await res.json();
-    if (!d.success) throw new Error("bad");
+
+    if (!d.success || typeof d.message !== "object") {
+      throw new Error("invalid");
+    }
+
     remaining = Number(d.message.remaining) || 0;
-    infoBox.innerText = T.remaining(remaining);
+    remainingUnknown = false;
+
+    infoBox.textContent = T.remaining(remaining);
 
     if (remaining <= 0) {
-      textarea.style.display = submitBtn.style.display = "none";
-      infoBox.innerText = T.noMore;
+      infoBox.textContent = T.noMore;
+      entriesWrap.innerHTML = "";
+      addBtn.disabled = true;
+      submitBtn.disabled = true;
+      counterBox.textContent = "";
+      return;
     }
+
+    // Initialize rows: one row only
+    if (getRows().length === 0) {
+      entriesWrap.appendChild(createRow());
+    }
+
+    updateCounter();
+    updateButtons();
   } catch (e) {
-    // If GET fails due to CORS, don't break the whole page
-    infoBox.innerText = " ";
-    remaining = 999999; // allow typing; server will enforce real limit
+    // If blocked by CORS, don't kill UI. Server will enforce on submit.
+    remainingUnknown = true;
+    infoBox.textContent = ""; // keep UI clean
+    if (getRows().length === 0) {
+      entriesWrap.appendChild(createRow());
+    }
+    updateCounter();
+    updateButtons();
   }
 }
 
-loadRemaining();
-
-/* Counter */
-textarea.addEventListener("input", () => {
-  const c = countEntries(textarea.value);
-  if (remaining !== 999999) {
-    counterBox.innerText = c > remaining ? T.exceeded(remaining) : T.counter(c, remaining);
-  } else {
-    counterBox.innerText = (lang === "en") ? `Entered: ${c}` : `عدد المدخلين: ${c}`;
+/* =========================
+   Add row
+========================= */
+addBtn.onclick = () => {
+  if (!remainingUnknown) {
+    if (getRows().length >= remaining) {
+      updateButtons();
+      return;
+    }
   }
-});
+  entriesWrap.appendChild(createRow());
+  updateButtons();
+  updateCounter();
+};
 
-/* POST (form-urlencoded: no preflight) */
-async function submitForm() {
-  submitBtn.disabled = true;
-  submitBtn.innerText = T.sending;
+/* =========================
+   Submit (POST form-urlencoded)
+========================= */
+submitBtn.onclick = async () => {
   clearMessage();
 
-  const rawText = textarea.value.trim();
-  if (!rawText) {
-    submitBtn.disabled = false;
-    submitBtn.innerText = T.submit;
-    setMessage("error", lang === "en" ? "Please enter at least one guest" : "يرجى إدخال شخص واحد على الأقل");
+  const entries = getFilledRows();
+
+  if (entries.length === 0) {
+    setMessage("error", T.pleaseAdd);
     return;
   }
 
-  const body = `id=${encodeURIComponent(id)}&names=${encodeURIComponent(rawText)}`;
+  // Validate each entry
+  for (const item of entries) {
+    if (!item.name.trim() || !item.phone.trim()) {
+      setMessage("error", T.fillBoth);
+      return;
+    }
+    if (!isValidPhone(item.phone)) {
+      setMessage("error", T.badPhone);
+      return;
+    }
+  }
+
+  // If remaining known, client-side check (server still checks)
+  if (!remainingUnknown && entries.length > remaining) {
+    setMessage("error", T.exceeded(remaining));
+    return;
+  }
+
+  submitBtn.disabled = true;
+  addBtn.disabled = true;
+  const oldText = submitBtn.textContent;
+  submitBtn.textContent = T.sending;
+
+  const namesText = buildNamesMultiline(entries);
+  const body = `id=${encodeURIComponent(id)}&names=${encodeURIComponent(namesText)}`;
 
   try {
     const res = await fetch(WEB_APP_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
+      },
       body
     });
 
     const d = await res.json();
 
     if (d.success) {
-      const msg = (typeof d.message === "object" && d.message.ok) ? d.message.ok : (lang === "en" ? "Submitted" : "تم الإرسال");
-      setMessage("success", msg);
+      // Success message can be object or string depending on your backend
+      let okMsg = "";
+      let remainingAfter = null;
 
-      // update remaining if provided
-      if (typeof d.message === "object" && d.message.remainingAfter != null) {
-        remaining = Number(d.message.remainingAfter) || 0;
-        infoBox.innerText = T.remaining(remaining);
-        if (remaining <= 0) {
-          textarea.style.display = submitBtn.style.display = "none";
-          infoBox.innerText = T.noMore;
-        }
+      if (typeof d.message === "object") {
+        okMsg = d.message.ok || (lang === "en" ? "Submitted successfully" : "تم الإرسال بنجاح");
+        if (d.message.remainingAfter != null) remainingAfter = Number(d.message.remainingAfter);
+      } else {
+        okMsg = String(d.message || (lang === "en" ? "Submitted" : "تم الإرسال"));
       }
 
-      textarea.value = "";
-      counterBox.innerText = "";
+      setMessage("success", okMsg);
+
+      // Reset UI
+      entriesWrap.innerHTML = "";
+      entriesWrap.appendChild(createRow());
+      counterBox.textContent = "";
+
+      // Update remaining if provided
+      if (remainingAfter != null && !Number.isNaN(remainingAfter)) {
+        remainingUnknown = false;
+        remaining = remainingAfter;
+        infoBox.textContent = remaining > 0 ? T.remaining(remaining) : T.noMore;
+
+        if (remaining <= 0) {
+          entriesWrap.innerHTML = "";
+          addBtn.disabled = true;
+          submitBtn.disabled = true;
+          return;
+        }
+      } else {
+        // Try reload remaining (optional)
+        await loadRemaining();
+      }
+
+      updateButtons();
+      updateCounter();
     } else {
       setMessage("error", String(d.message || "Error"));
+      updateButtons();
+      updateCounter();
     }
   } catch (e) {
-    setMessage("error", "Network error");
+    setMessage("error", T.networkError);
+    updateButtons();
+    updateCounter();
   } finally {
+    submitBtn.textContent = oldText;
     submitBtn.disabled = false;
-    submitBtn.innerText = T.submit;
+    updateButtons();
   }
-}
+};
 
-submitBtn.onclick = submitForm;
+/* =========================
+   Init
+========================= */
+loadRemaining();
