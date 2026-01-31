@@ -4,45 +4,40 @@
   <meta charset="UTF-8" />
   <title data-i18n="pageTitle">تسجيل المدعوين</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
   <div class="container">
 
-    <!-- زر اللغة -->
-    <button id="langToggle" class="lang-toggle">English</button>
+    <div class="top-bar">
+      <button id="langToggle" class="lang-toggle">English</button>
+    </div>
 
-    <!-- الشعار -->
     <img src="assets/logo.png" class="logo" alt="Logo" />
 
-    <!-- العنوان -->
     <h1 data-i18n="title">تسجيل المدعوين</h1>
 
-    <!-- صندوق المعلومات -->
     <div id="infoBox" class="info" data-i18n="loading">
       جارٍ تحميل البيانات...
     </div>
 
-    <!-- الوصف -->
     <p class="subtitle" data-i18n="subtitle">
-      يرجى إدخال الاسم مع رقم الهاتف (كل شخص بسطر)
+      أدخل الاسم ورقم الهاتف ثم اضغط +
     </p>
 
-    <!-- textarea -->
-    <textarea
-      id="names"
-      data-i18n-placeholder="placeholder"
-    ></textarea>
+    <!-- قائمة البوكسات -->
+    <div id="entries" class="entries"></div>
 
-    <!-- العداد -->
+    <button id="addBtn" class="add-btn" type="button">
+      <span class="plus">+</span>
+      <span data-i18n="add">إضافة شخص</span>
+    </button>
+
     <div id="counter" class="counter"></div>
 
-    <!-- زر الإرسال -->
-    <button id="submitBtn" data-i18n="submit">إرسال</button>
+    <button id="submitBtn" type="button" data-i18n="submit">إرسال</button>
 
-    <!-- الرسائل -->
     <div id="result" class="message"></div>
 
   </div>
