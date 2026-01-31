@@ -1,15 +1,15 @@
 /* =========================================================
-   js/app.js (GitHub Pages + Google Apps Script)
+   invite-form/js/app.js (Stable)
    - AR/EN toggle via ?lang=en
-   - Shows remaining immediately on page load (GET)
-   - Adds rows: name + phone + remove
-   - Submits as application/x-www-form-urlencoded (no preflight)
-   - If POST response can't be read (CORS/HTML), verifies by reloading remaining (GET)
+   - Show remaining immediately via GET
+   - Add guests as rows: name + phone + remove
+   - Submit via x-www-form-urlencoded (no preflight)
+   - If POST response can't be read, verify success by reloading remaining (GET)
 ========================================================= */
 
-/* ====== PUT YOUR WEB APP URL HERE (must end with /exec) ====== */
+/* ====== YOUR WEB APP URL (must end with /exec) ====== */
 const WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbxw9IFAtE9PU8I_PpOXZroOgiHel7VHrYeQdJVFKM3TaX1h2vBQ3XgUyDYnJbG7TH1C/exec";
+  "https://script.google.com/macros/s/AKfycbxJrozMpuq6JViBuNg2g7c9KNCDBXSZXFEe_l_yL36XfqpsT1EU060CfbhOe0kj0WoU/exec";
 
 /* =========================
    Elements
@@ -21,7 +21,7 @@ const infoBox = document.getElementById("infoBox");
 const entriesWrap = document.getElementById("entries");
 const addBtn = document.getElementById("addBtn");
 const addText = document.getElementById("addText");
-const counterBox = document.getElementById("counter"); // will be hidden (remaining only)
+const counterBox = document.getElementById("counter"); // we will hide it
 const submitBtn = document.getElementById("submitBtn");
 const resultBox = document.getElementById("result");
 
@@ -37,34 +37,34 @@ function currentLang() {
 }
 
 function setMessage(type, text) {
+  if (!resultBox) return;
   resultBox.className = "message " + type;
   resultBox.textContent = text;
 }
 
 function clearMessage() {
+  if (!resultBox) return;
   resultBox.className = "message";
   resultBox.textContent = "";
 }
 
 function toLatinDigits(str) {
-  // Arabic-Indic ٠١٢٣٤٥٦٧٨٩
-  // Eastern Arabic/Persian ۰۱۲۳۴۵۶۷۸۹
+  // Arabic-Indic ٠١٢٣٤٥٦٧٨٩ + Persian ۰۱۲۳۴۵۶۷۸۹
   return String(str || "")
     .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
     .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
 }
 
 function cleanPhone(raw) {
-  // Keep digits and optional leading +
   return toLatinDigits(String(raw || "").trim()).replace(/[^\d+]/g, "");
 }
 
 function isValidPhone(raw) {
-  // + optional then 7..15 digits
   return /^\+?\d{7,15}$/.test(cleanPhone(raw));
 }
 
 function getRows() {
+  if (!entriesWrap) return [];
   return Array.from(entriesWrap.querySelectorAll(".entry-row"));
 }
 
@@ -72,8 +72,8 @@ function getFilledRows() {
   const rows = getRows();
   const out = [];
   for (const row of rows) {
-    const name = row.querySelector(".name").value.trim();
-    const phone = row.querySelector(".phone").value.trim();
+    const name = (row.querySelector(".name")?.value || "").trim();
+    const phone = (row.querySelector(".phone")?.value || "").trim();
     if (!name && !phone) continue;
     out.push({ name, phone });
   }
@@ -81,7 +81,6 @@ function getFilledRows() {
 }
 
 function buildNamesMultiline(entries) {
-  // Server expects lines like: "Name - +123..."
   return entries.map((x) => `${x.name} - ${cleanPhone(x.phone)}`).join("\n");
 }
 
@@ -97,17 +96,19 @@ const I18N = {
     addGuest: "إضافة شخص",
     submit: "إرسال",
 
-    remaining: (r) => `باقيلك: ${r} أشخاص`,
-    noMore: "تم استكمال العدد المسموح",
+    remaining: (r) => `باقيلك: ${r}`,
     invalidLink: "الرابط غير صالح",
     invalidCode: "كود غير صالح",
+    noMore: "تم استكمال العدد المسموح",
     remainingUnavailable: "تعذّر تحميل المتبقي حالياً",
 
+    exceeded: (r) => `⚠️ تجاوزت الحد (${r})`,
     sending: "جارٍ الإرسال...",
     pleaseAdd: "يرجى إضافة شخص واحد على الأقل",
     fillBoth: "يرجى إدخال الاسم ورقم الهاتف لكل شخص",
     badPhone: "يرجى إدخال رقم هاتف صحيح",
-    networkError: "خطأ بالشبكة"
+    networkError: "خطأ بالشبكة",
+    confirmUnknown: "تم الإرسال لكن تعذّر تأكيد النتيجة، تحقق من المتبقي."
   },
   en: {
     pageTitle: "Guest Registration",
@@ -117,17 +118,19 @@ const I18N = {
     addGuest: "Add guest",
     submit: "Submit",
 
-    remaining: (r) => `You have ${r} guests left`,
-    noMore: "No remaining slots",
+    remaining: (r) => `Remaining: ${r}`,
     invalidLink: "Invalid link",
     invalidCode: "Invalid code",
+    noMore: "No remaining slots",
     remainingUnavailable: "Couldn't load remaining right now",
 
+    exceeded: (r) => `⚠️ Limit exceeded (${r})`,
     sending: "Submitting...",
     pleaseAdd: "Please add at least one guest",
     fillBoth: "Please enter name and phone for each guest",
     badPhone: "Please enter a valid phone number",
-    networkError: "Network error"
+    networkError: "Network error",
+    confirmUnknown: "Submitted but couldn't confirm. Check remaining."
   }
 };
 
@@ -158,7 +161,6 @@ if (langToggleBtn) {
 ========================= */
 const id = getParam("id");
 let remaining = 0;
-// If GET is blocked or fails, keep UI working and server enforces on submit
 let remainingUnknown = false;
 
 /* =========================
@@ -177,7 +179,7 @@ function createRow() {
   const phoneInput = document.createElement("input");
   phoneInput.className = "phone";
   phoneInput.type = "tel";
-  phoneInput.placeholder = lang === "en" ? "Phone number" : "رقم الهاتف";
+  phoneInput.placeholder = lang === "en" ? "Phone number (+ optional)" : "رقم الهاتف (+اختياري)";
   phoneInput.autocomplete = "tel";
 
   const removeBtn = document.createElement("button");
@@ -213,52 +215,47 @@ function createRow() {
    Buttons
 ========================= */
 function updateButtons() {
-  // Hide counter (remaining only)
-  if (counterBox) counterBox.style.display = "none";
+  if (counterBox) counterBox.style.display = "none"; // show remaining only
 
-  // No link id => disable everything
+  if (!addBtn || !submitBtn) return;
+
   if (!id) {
     addBtn.disabled = true;
     submitBtn.disabled = true;
     return;
   }
 
-  // If remaining is known and no slots left => disable everything
   if (!remainingUnknown && remaining <= 0) {
     addBtn.disabled = true;
     submitBtn.disabled = true;
     return;
   }
 
-  // Enable submit by default (server will still enforce limits)
-  submitBtn.disabled = false;
-
-  // Add button: limit based on how many entries are actually filled
+  // Disable add if remaining is known and we've already created enough rows
   if (!remainingUnknown) {
-    const filledCount = getFilledRows().length;
-    addBtn.disabled = filledCount >= remaining;
+    addBtn.disabled = getRows().length >= remaining;
   } else {
-    // Remaining unknown => allow adding
     addBtn.disabled = false;
   }
+
+  submitBtn.disabled = false;
 }
 
 /* =========================
    Load Remaining (GET)
 ========================= */
 async function loadRemaining() {
-  // Always hide counter
   if (counterBox) counterBox.style.display = "none";
 
   if (!id) {
-    infoBox.textContent = T.invalidLink;
-    entriesWrap.style.display = "none";
-    addBtn.style.display = "none";
-    submitBtn.style.display = "none";
+    if (infoBox) infoBox.textContent = T.invalidLink;
+    if (entriesWrap) entriesWrap.style.display = "none";
+    if (addBtn) addBtn.style.display = "none";
+    if (submitBtn) submitBtn.style.display = "none";
     return;
   }
 
-  infoBox.textContent = T.loading;
+  if (infoBox) infoBox.textContent = T.loading;
 
   try {
     const res = await fetch(
@@ -268,56 +265,45 @@ async function loadRemaining() {
 
     const d = await res.json();
 
-    // If server says invalid code/link, stop and hide form
-    if (!d || !d.success) {
-      infoBox.textContent = T.invalidCode;
-      entriesWrap.style.display = "none";
-      addBtn.style.display = "none";
-      submitBtn.style.display = "none";
+    if (!d || !d.success || typeof d.message !== "object") {
+      // Invalid code => hide form
+      if (infoBox) infoBox.textContent = T.invalidCode;
+      if (entriesWrap) entriesWrap.style.display = "none";
+      if (addBtn) addBtn.style.display = "none";
+      if (submitBtn) submitBtn.style.display = "none";
       remainingUnknown = false;
       remaining = 0;
       updateButtons();
       return;
     }
 
-    if (typeof d.message !== "object") {
-      throw new Error("bad payload");
-    }
-
     remaining = Number(d.message.remaining) || 0;
     remainingUnknown = false;
 
     // Show remaining immediately
-    infoBox.textContent = T.remaining(remaining);
+    if (infoBox) infoBox.textContent = remaining > 0 ? T.remaining(remaining) : T.noMore;
 
     // Show form (even if remaining=0 we will disable)
-    entriesWrap.style.display = "";
-    addBtn.style.display = "";
-    submitBtn.style.display = "";
+    if (entriesWrap) entriesWrap.style.display = "";
+    if (addBtn) addBtn.style.display = "";
+    if (submitBtn) submitBtn.style.display = "";
 
-    if (remaining <= 0) {
-      infoBox.textContent = T.noMore;
-      entriesWrap.innerHTML = "";
-      updateButtons();
-      return;
-    }
-
-    if (getRows().length === 0) {
+    if (remaining > 0 && getRows().length === 0) {
       entriesWrap.appendChild(createRow());
     }
 
     updateButtons();
   } catch (e) {
-    // GET failed (CORS/HTML/Network) => keep UI usable
+    // GET failed: keep UI working, but show fallback text
     remainingUnknown = true;
 
-    infoBox.textContent = T.remainingUnavailable;
+    if (infoBox) infoBox.textContent = T.remainingUnavailable;
 
-    entriesWrap.style.display = "";
-    addBtn.style.display = "";
-    submitBtn.style.display = "";
+    if (entriesWrap) entriesWrap.style.display = "";
+    if (addBtn) addBtn.style.display = "";
+    if (submitBtn) submitBtn.style.display = "";
 
-    if (getRows().length === 0) {
+    if (getRows().length === 0 && entriesWrap) {
       entriesWrap.appendChild(createRow());
     }
 
@@ -328,154 +314,158 @@ async function loadRemaining() {
 /* =========================
    Add row
 ========================= */
-addBtn.onclick = () => {
-  // If remaining is known, stop adding once filled reaches remaining
-  if (!remainingUnknown) {
-    const filled = getFilledRows().length;
-    if (filled >= remaining) {
+if (addBtn) {
+  addBtn.onclick = () => {
+    if (!entriesWrap) return;
+
+    if (!remainingUnknown && getRows().length >= remaining) {
       updateButtons();
       return;
     }
-  }
-  entriesWrap.appendChild(createRow());
-  updateButtons();
-};
+
+    entriesWrap.appendChild(createRow());
+    updateButtons();
+  };
+}
 
 /* =========================
    Submit (POST form-urlencoded)
-   - If response can't be read, verify by reloading remaining
+   - If response can't be read, verify by reloading remaining (GET)
 ========================= */
-submitBtn.onclick = async () => {
-  clearMessage();
+if (submitBtn) {
+  submitBtn.onclick = async () => {
+    clearMessage();
 
-  const entries = getFilledRows();
+    const entries = getFilledRows();
 
-  if (entries.length === 0) {
-    setMessage("error", T.pleaseAdd);
-    return;
-  }
-
-  // Validate each entry
-  for (const item of entries) {
-    if (!item.name.trim() || !item.phone.trim()) {
-      setMessage("error", T.fillBoth);
+    if (entries.length === 0) {
+      setMessage("error", T.pleaseAdd);
       return;
     }
-    if (!isValidPhone(item.phone)) {
-      setMessage("error", T.badPhone);
-      return;
-    }
-  }
 
-  // Snapshot before submit (for verification fallback)
-  const remainingBefore = remainingUnknown ? null : remaining;
-
-  // Client-side limit check (server still checks)
-  if (!remainingUnknown && entries.length > remaining) {
-    setMessage("error", `${T.remaining(remaining)} - ${T.fillBoth}`);
-    return;
-  }
-
-  submitBtn.disabled = true;
-  addBtn.disabled = true;
-  const oldText = submitBtn.textContent;
-  submitBtn.textContent = T.sending;
-
-  const namesText = buildNamesMultiline(entries);
-  const body = `id=${encodeURIComponent(id)}&names=${encodeURIComponent(namesText)}`;
-
-  try {
-    const res = await fetch(WEB_APP_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"
-      },
-      body,
-      cache: "no-store"
-    });
-
-    // Try parse JSON (may fail if response is blocked or HTML)
-    let d = null;
-    try {
-      d = await res.json();
-    } catch (_) {
-      d = null;
-    }
-
-    // If we got JSON, handle it
-    if (d && typeof d === "object") {
-      if (d.success) {
-        let okMsg = lang === "en" ? "Submitted successfully" : "تم الإرسال بنجاح";
-        let remainingAfter = null;
-
-        if (typeof d.message === "object") {
-          if (d.message.ok) okMsg = String(d.message.ok);
-          if (d.message.remainingAfter != null) remainingAfter = Number(d.message.remainingAfter);
-        } else if (d.message) {
-          okMsg = String(d.message);
-        }
-
-        setMessage("success", okMsg);
-
-        // Reset UI inputs
-        entriesWrap.innerHTML = "";
-        entriesWrap.appendChild(createRow());
-
-        // Update remaining
-        if (remainingAfter != null && !Number.isNaN(remainingAfter)) {
-          remainingUnknown = false;
-          remaining = remainingAfter;
-          infoBox.textContent = remaining > 0 ? T.remaining(remaining) : T.noMore;
-        } else {
-          await loadRemaining();
-        }
-
-        updateButtons();
+    for (const item of entries) {
+      if (!item.name.trim() || !item.phone.trim()) {
+        setMessage("error", T.fillBoth);
         return;
-      } else {
-        // Server explicit error
-        setMessage("error", String(d.message || "Error"));
-        updateButtons();
+      }
+      if (!isValidPhone(item.phone)) {
+        setMessage("error", T.badPhone);
         return;
       }
     }
 
-    // Fallback: couldn't read/parse response => verify using GET
-    await loadRemaining();
-
-    if (remainingBefore !== null && !remainingUnknown && remaining < remainingBefore) {
-      setMessage("success", lang === "en" ? "Submitted successfully" : "تم الإرسال بنجاح");
-      entriesWrap.innerHTML = "";
-      entriesWrap.appendChild(createRow());
-    } else {
-      setMessage(
-        "error",
-        lang === "en"
-          ? "Submitted, but couldn't confirm. Check remaining."
-          : "تم الإرسال، لكن تعذّر تأكيد النتيجة. تحقق من المتبقي."
-      );
+    // Client-side limit check if remaining is known
+    if (!remainingUnknown && entries.length > remaining) {
+      setMessage("error", T.exceeded(remaining));
+      return;
     }
-  } catch (e) {
-    // Network/CORS read issue => verify using GET
-    const before = remainingBefore;
+
+    const remainingBefore = remainingUnknown ? null : remaining;
+
+    submitBtn.disabled = true;
+    if (addBtn) addBtn.disabled = true;
+
+    const oldText = submitBtn.textContent;
+    submitBtn.textContent = T.sending;
+
+    const namesText = buildNamesMultiline(entries);
+    const body = `id=${encodeURIComponent(id)}&names=${encodeURIComponent(namesText)}`;
 
     try {
-      await loadRemaining();
-    } catch (_) {}
+      const res = await fetch(WEB_APP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+        body,
+        cache: "no-store"
+      });
 
-    if (before !== null && !remainingUnknown && remaining < before) {
-      setMessage("success", lang === "en" ? "Submitted successfully" : "تم الإرسال بنجاح");
-      entriesWrap.innerHTML = "";
-      entriesWrap.appendChild(createRow());
-    } else {
-      setMessage("error", T.networkError);
+      // Try parse JSON (may fail if blocked/HTML)
+      let d = null;
+      try {
+        d = await res.json();
+      } catch (_) {
+        d = null;
+      }
+
+      // If server JSON is readable
+      if (d && typeof d === "object") {
+        if (d.success) {
+          let okMsg = lang === "en" ? "Submitted successfully" : "تم الإرسال بنجاح";
+          let remainingAfter = null;
+
+          if (typeof d.message === "object") {
+            if (d.message.ok) okMsg = String(d.message.ok);
+            if (d.message.remainingAfter != null) remainingAfter = Number(d.message.remainingAfter);
+          } else if (d.message) {
+            okMsg = String(d.message);
+          }
+
+          setMessage("success", okMsg);
+
+          // Reset UI
+          if (entriesWrap) {
+            entriesWrap.innerHTML = "";
+            entriesWrap.appendChild(createRow());
+          }
+
+          // Update remaining display
+          if (remainingAfter != null && !Number.isNaN(remainingAfter)) {
+            remainingUnknown = false;
+            remaining = remainingAfter;
+            if (infoBox) infoBox.textContent = remaining > 0 ? T.remaining(remaining) : T.noMore;
+          } else {
+            await loadRemaining();
+          }
+
+          updateButtons();
+          return;
+        } else {
+          setMessage("error", String(d.message || "Error"));
+          updateButtons();
+          return;
+        }
+      }
+
+      // Fallback: can't read response => verify via GET
+      await loadRemaining();
+
+      if (remainingBefore !== null && !remainingUnknown && remaining < remainingBefore) {
+        setMessage("success", lang === "en" ? "Submitted successfully" : "تم الإرسال بنجاح");
+        if (entriesWrap) {
+          entriesWrap.innerHTML = "";
+          entriesWrap.appendChild(createRow());
+        }
+      } else {
+        setMessage("error", T.confirmUnknown);
+      }
+
+      updateButtons();
+    } catch (e) {
+      // Network/CORS read issue => verify via GET
+      const before = remainingBefore;
+
+      try {
+        await loadRemaining();
+      } catch (_) {}
+
+      if (before !== null && !remainingUnknown && remaining < before) {
+        setMessage("success", lang === "en" ? "Submitted successfully" : "تم الإرسال بنجاح");
+        if (entriesWrap) {
+          entriesWrap.innerHTML = "";
+          entriesWrap.appendChild(createRow());
+        }
+      } else {
+        setMessage("error", T.networkError);
+      }
+
+      updateButtons();
+    } finally {
+      submitBtn.textContent = oldText;
+      submitBtn.disabled = false;
+      updateButtons();
     }
-  } finally {
-    submitBtn.textContent = oldText;
-    submitBtn.disabled = false;
-    updateButtons();
-  }
-};
+  };
+}
 
 /* =========================
    Init
