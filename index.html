@@ -4,44 +4,56 @@
   <meta charset="UTF-8" />
   <title data-i18n="pageTitle">تسجيل المدعوين</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Your CSS -->
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
   <div class="container">
 
+    <!-- Language toggle -->
     <div class="top-bar">
       <button id="langToggle" class="lang-toggle">English</button>
     </div>
 
+    <!-- Logo (optional) -->
     <img src="assets/logo.png" class="logo" alt="Logo" />
 
-    <h1 data-i18n="title">تسجيل المدعوين</h1>
+    <!-- Title -->
+    <h1 id="title" data-i18n="title">تسجيل المدعوين</h1>
 
+    <!-- Remaining box -->
     <div id="infoBox" class="info" data-i18n="loading">
       جارٍ تحميل البيانات...
     </div>
 
-    <p class="subtitle" data-i18n="subtitle">
+    <!-- Subtitle -->
+    <p id="subtitle" class="subtitle" data-i18n="subtitle">
       أدخل الاسم ورقم الهاتف ثم اضغط +
     </p>
 
-    <!-- قائمة البوكسات -->
+    <!-- Entries container (rows will be added by JS) -->
     <div id="entries" class="entries"></div>
 
+    <!-- Add guest button -->
     <button id="addBtn" class="add-btn" type="button">
       <span class="plus">+</span>
-      <span data-i18n="add">إضافة شخص</span>
+      <span id="addText" data-i18n="addGuest">إضافة شخص</span>
     </button>
 
+    <!-- Counter -->
     <div id="counter" class="counter"></div>
 
+    <!-- Submit button -->
     <button id="submitBtn" type="button" data-i18n="submit">إرسال</button>
 
+    <!-- Result message -->
     <div id="result" class="message"></div>
 
   </div>
 
+  <!-- Your JS -->
   <script src="js/app.js"></script>
 </body>
 </html>
