@@ -9,7 +9,7 @@
 
 /* ====== PUT YOUR WEB APP URL HERE (must end with /exec) ====== */
 const WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbyB83VPh7di9M0zddTvu12z2X5dOJecs6XY4aD2AVAJ-71fqp3kXwDXlL0vIIZGMITDFQ/exec";
+  "https://script.google.com/macros/s/AKfycbya43Ty_GL8UQN1AY-qtBY-9GBepYtwfr91z9xIzyUHOuz9YtjGNIz2bxU0bkjcJgMh/exec";
 
 /* =========================
    Elements
@@ -427,3 +427,4 @@ submitBtn.onclick = async () => {
    Init
 ========================= */
 loadRemaining();
+
