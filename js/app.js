@@ -9,7 +9,7 @@
 
 /* ====== PUT YOUR WEB APP URL HERE (must end with /exec) ====== */
 const WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbySY6RxbiPOwogEHK4S_7Oy-Qg_vtW55jEYarCxiSEoP0uLobPbwitDaQJE3GFwCOYL3g/exec";
+  "https://script.google.com/macros/s/AKfycbyB83VPh7di9M0zddTvu12z2X5dOJecs6XY4aD2AVAJ-71fqp3kXwDXlL0vIIZGMITDFQ/exec";
 
 /* =========================
    Elements
@@ -201,40 +201,52 @@ function createRow() {
    Counter + Buttons
 ========================= */
 function updateCounter() {
-  const count = getFilledRows().length;
+  const filled = getFilledRows().length;
 
   if (remainingUnknown) {
-    counterBox.textContent = T.counterNoLimit(count);
+    // ما منعرف المتبقي، فخليها فاضية أو اعرض عدد المدخلين فقط
+    counterBox.textContent = "";
     return;
   }
 
-  counterBox.textContent =
-    count > remaining ? T.exceeded(remaining) : T.counter(count, remaining);
+  const left = remaining - filled;
+
+  if (left <= 0) {
+    counterBox.textContent = T.leftNowNone;
+  } else {
+    counterBox.textContent = T.leftNow(left);
+  }
 }
 
+
 function updateButtons() {
-  // Submit disabled only when no id or when remaining known and <= 0
+  // No link id => disable everything
   if (!id) {
     addBtn.disabled = true;
     submitBtn.disabled = true;
     return;
   }
 
+  // If remaining is known and no slots left => disable everything
   if (!remainingUnknown && remaining <= 0) {
     addBtn.disabled = true;
     submitBtn.disabled = true;
     return;
   }
 
-  // Add button disabled if we already have remaining rows created (not just filled)
+  // Enable submit by default (server will still enforce limits)
+  submitBtn.disabled = false;
+
+  // Add button: limit based on how many entries are actually filled
   if (!remainingUnknown) {
-    addBtn.disabled = getRows().length >= remaining;
+    const filledCount = getFilledRows().length;
+    addBtn.disabled = filledCount >= remaining;
   } else {
+    // Remaining unknown => allow adding
     addBtn.disabled = false;
   }
-
-  submitBtn.disabled = false;
 }
+
 
 /* =========================
    Load Remaining (GET)
