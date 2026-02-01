@@ -20,27 +20,6 @@ body {
   border-top: 4px solid #F36A10;
 }
 
-.top-bar {
-  display: flex;
-  justify-content: flex-start;
-  margin-bottom: 10px;
-}
-
-.lang-toggle {
-  width: auto;
-  background: transparent;
-  border: 1px solid #F36A10;
-  color: #F36A10;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.lang-toggle:hover {
-  background: rgba(243, 106, 16, 0.15);
-}
-
 .logo {
   display: block;
   margin: 0 auto 20px;
