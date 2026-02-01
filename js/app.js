@@ -2,7 +2,7 @@
    الإعدادات
 ========================= */
 const WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbwGi4xutOFdN1gtVPzrVKLlhKpwYyVPnrAl6PpkPO8IGIMyH2J9ttKnFhbKWAU8we9y/exec";
+  "https://script.google.com/macros/s/AKfycbxUdbDbMtqzOxvjJi1FcvCM4EgjtieIZatDA1kdEPtbU-OqEYjGTX5_0Vrd-_CXqOoK/exec";
 
 /* =========================
    العناصر
@@ -96,11 +96,11 @@ addBtn.onclick = () => {
 /* =========================
    الإرسال
 ========================= */
-submitBtn.onclick = async () => {
+submitBtn.onclick = () => {
   clearMessage();
 
   const rows = entriesDiv.querySelectorAll(".entry-row");
-  const entries = [];
+  let text = "";
 
   rows.forEach(row => {
     const inputs = row.querySelectorAll("input");
@@ -108,37 +108,38 @@ submitBtn.onclick = async () => {
     const phone = inputs[1].value.trim();
 
     if (name && phone) {
-      entries.push({ name, phone });
+      text += name + " - " + phone + "\n";
     }
   });
 
-  if (entries.length === 0) {
-    showMessage("error", "يرجى إدخال اسم ورقم هاتف");
+  if (!text) {
+    showMessage("error", "يرجى إدخال الاسم ورقم الهاتف");
     return;
   }
 
-  const id = getIdFromUrl();
+  const id = new URLSearchParams(window.location.search).get("id");
 
-  try {
-    const res = await fetch(WEB_APP_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, entries })
-    });
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = WEB_APP_URL;
 
-    const data = await res.json();
+  const inputId = document.createElement("input");
+  inputId.type = "hidden";
+  inputId.name = "id";
+  inputId.value = id;
 
-    if (data.success) {
-      showMessage("success", "تم الإرسال بنجاح");
-      entriesDiv.innerHTML = "";
-      loadRemaining();
-    } else {
-      showMessage("error", data.data || "فشل الإرسال");
-    }
-  } catch (e) {
-    showMessage("error", "خطأ في الإرسال");
-  }
+  const inputNames = document.createElement("input");
+  inputNames.type = "hidden";
+  inputNames.name = "names";
+  inputNames.value = text;
+
+  form.appendChild(inputId);
+  form.appendChild(inputNames);
+
+  document.body.appendChild(form);
+  form.submit();
 };
+
 
 /* =========================
    بدء التشغيل
